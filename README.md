@@ -1,7 +1,9 @@
 # Log nginx requests into Apache Kafka 
 
 **[Nginx](https://nignx.org/)** module to log requests into an Apache Kafka
+
 Uses [librdkafka](https://github.com/edenhill/librdkafka)
+
 Inspired by [nginx-kafka-log-module](https://github.com/kaltura/nginx-kafka-log-module)
 
 # Build
@@ -18,7 +20,7 @@ Inspired by [nginx-kafka-log-module](https://github.com/kaltura/nginx-kafka-log-
 
 **Nginx** configuration directives below. Module does not register any *nginx variables*
 
-## klm_brokerss
+## klm_brokers
 **Syntax**: `klm_brokers  brokers_list`
 **Default**: `NULL`
 **Context**: main   
