@@ -14,7 +14,7 @@
 #include "librdkafka/rdkafka.h"
 
 
-#define NGX_HTTP_KLM_VERSION              "0.0.2"
+#define NGX_HTTP_KLM_VERSION              "0.0.3"
 #define NGX_HTTP_KLM_FILE_BUF_SIZE        4096
 #define NGX_HTTP_KLM_FILE_BUF_SIZE_MAX    4096 * 100
 
@@ -330,7 +330,7 @@ static char *ngx_http_klm_conf_set_log(ngx_conf_t *cf, ngx_command_t *cmd, void 
         if( (list->next = ngx_pcalloc(cf->pool, sizeof(*list->next))) == NULL )
             return NGX_CONF_ERROR;
         
-        log->topic = list->item = ngx_array_push(mcf->topics);
+        log->topic = list->item = ngx_pcalloc(cf->pool, sizeof(*log->topic));
         if( log->topic == NULL )
             return NGX_CONF_ERROR;
 
@@ -372,7 +372,7 @@ static char *ngx_http_klm_conf_set_log(ngx_conf_t *cf, ngx_command_t *cmd, void 
         if( (list->next = ngx_pcalloc(cf->pool, sizeof(*list->next))) == NULL )
             return NGX_CONF_ERROR;
 
-        log->file = list->item = ngx_array_push(mcf->files));
+        log->file = list->item = ngx_pcalloc(cf->pool, sizeof(*log->file));
         if( log->file == NULL)
             return NGX_CONF_ERROR;
 
@@ -439,7 +439,6 @@ static ngx_int_t ngx_http_klm_init(ngx_conf_t *cf)
     ngx_http_klm_list_t         *list;
     ngx_http_handler_pt         *hpt;
     ngx_http_klm_file_t         *file;
-    ngx_uint_t                   i;
 
     mcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_kafka_log_module);
     if( mcf->brokers.len == 0 )
