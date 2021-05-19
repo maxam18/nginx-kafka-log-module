@@ -14,7 +14,7 @@
 #include "librdkafka/rdkafka.h"
 
 
-#define NGX_HTTP_KLM_VERSION              "0.0.1"
+#define NGX_HTTP_KLM_VERSION              "0.0.2"
 #define NGX_HTTP_KLM_FILE_BUF_SIZE        4096
 #define NGX_HTTP_KLM_FILE_BUF_SIZE_MAX    4096 * 100
 
@@ -40,13 +40,19 @@ typedef struct {
     ngx_str_t                    value;
 } ngx_http_klm_prop_t;
 
+typedef struct ngx_http_klm_list_s ngx_http_klm_list_t;
+struct ngx_http_klm_list_s {
+    void                        *item;
+    ngx_http_klm_list_t         *next;
+};
+
 typedef struct {
     ngx_str_t                    brokers;
     rd_kafka_t                  *rk;
     ngx_array_t                 *props;        /* ngx_http_klm_prop_t array  */
-    ngx_array_t                 *topics;       /* ngx_http_klm_topic_t array */
     ngx_array_t                 *formats;      /* ngx_http_klm_fmt_t array   */
-    ngx_array_t                 *files;        /* ngx_open_file_t array      */
+    ngx_http_klm_list_t         *files;        /* files list                 */
+    ngx_http_klm_list_t         *topics;       /* topics list                */
 } ngx_http_klm_main_conf_t;
 
 typedef struct {
@@ -170,7 +176,7 @@ ngx_int_t ngx_http_klm_handler(ngx_http_request_t *r)
             || (ngx_http_complex_value(r, &log->format->key, &key) != NGX_OK) )
             continue;
         
-        err = rd_kafka_produce( log->topic->rkt, log->partition
+        err = rd_kafka_produce(log->topic->rkt, log->partition
                         , RD_KAFKA_MSG_F_COPY
                         , msg.data, msg.len
                         , (const char *) key.data, key.len
@@ -274,6 +280,7 @@ static char *ngx_http_klm_conf_set_log(ngx_conf_t *cf, ngx_command_t *cmd, void 
 {
     ngx_http_klm_main_conf_t    *mcf;
     ngx_http_klm_loc_conf_t     *lcf = conf;
+    ngx_http_klm_list_t         *list;
     ngx_http_klm_log_t          *log;
     ngx_str_t                   *args = cf->args->elts;
     ngx_str_t                    name;
@@ -294,7 +301,6 @@ static char *ngx_http_klm_conf_set_log(ngx_conf_t *cf, ngx_command_t *cmd, void 
     if( log == NULL )
         return NGX_CONF_ERROR;
 
-
     if( (p = (u_char *)ngx_strchr(args[1].data, ':')) )
     {
         name.len = p - args[1].data;
@@ -308,17 +314,24 @@ static char *ngx_http_klm_conf_set_log(ngx_conf_t *cf, ngx_command_t *cmd, void 
         log->partition = RD_KAFKA_PARTITION_UA;
     }
 
-    log->topic = mcf->topics->elts;
-    for (i = 0; i < mcf->topics->nelts; ++i, ++log->topic)
+    for( list = mcf->topics;
+         (log->topic = list->item) != NULL;
+         list = list->next )
+    {
         if( log->topic->name.len == name.len
              && ngx_strncmp(log->topic->name.data
                     , name.data, name.len) 
             == 0 )
             break;
+    }
 
-    if( i >= mcf->topics->nelts )
+    if( log->topic == NULL )
     {
-        if( (log->topic = ngx_array_push(mcf->topics)) == NULL)
+        if( (list->next = ngx_pcalloc(cf->pool, sizeof(*list->next))) == NULL )
+            return NGX_CONF_ERROR;
+        
+        log->topic = list->item = ngx_array_push(mcf->topics);
+        if( log->topic == NULL )
             return NGX_CONF_ERROR;
 
         log->topic->name = name;
@@ -343,17 +356,24 @@ static char *ngx_http_klm_conf_set_log(ngx_conf_t *cf, ngx_command_t *cmd, void 
     if( cf->args->nelts == 3 )
         return NGX_CONF_OK;
     
-    log->file = mcf->files->elts;
-    for (i = 0; i < mcf->files->nelts; ++i, ++log->file)
+    for( list = mcf->files; 
+         (log->file = list->item) != NULL;
+         list = list->next )
+    {
         if( log->file->name.len == args[3].len
              && ngx_strncmp(log->file->name.data
                     , args[3].data, args[3].len) 
             == 0 )
             break;
+    }
 
-    if( i >= mcf->files->nelts )
+    if( log->file == NULL )
     {
-        if( (log->file = ngx_array_push(mcf->files)) == NULL)
+        if( (list->next = ngx_pcalloc(cf->pool, sizeof(*list->next))) == NULL )
+            return NGX_CONF_ERROR;
+
+        log->file = list->item = ngx_array_push(mcf->files));
+        if( log->file == NULL)
             return NGX_CONF_ERROR;
 
         log->file->name = args[3];
@@ -393,7 +413,7 @@ static void *ngx_http_klm_create_main_conf(ngx_conf_t *cf)
     if( NULL == mcf )
         return NULL;
     
-    mcf->topics = ngx_array_create(cf->pool, 2, sizeof(ngx_http_klm_topic_t));
+    mcf->topics = ngx_pcalloc(cf->pool, sizeof(*mcf->topics));
     if (mcf->topics == NULL)
         return NGX_CONF_ERROR;
 
@@ -405,7 +425,7 @@ static void *ngx_http_klm_create_main_conf(ngx_conf_t *cf)
     if (mcf->props == NULL)
         return NGX_CONF_ERROR;
 
-    mcf->files = ngx_array_create(cf->pool, 2, sizeof(ngx_open_file_t));
+    mcf->files = ngx_pcalloc(cf->pool, sizeof(*mcf->files));
     if (mcf->files == NULL)
         return NGX_CONF_ERROR;
 
@@ -416,6 +436,7 @@ static ngx_int_t ngx_http_klm_init(ngx_conf_t *cf)
 {
     ngx_http_core_main_conf_t   *cmcf;
     ngx_http_klm_main_conf_t    *mcf;
+    ngx_http_klm_list_t         *list;
     ngx_http_handler_pt         *hpt;
     ngx_http_klm_file_t         *file;
     ngx_uint_t                   i;
@@ -436,8 +457,9 @@ static ngx_int_t ngx_http_klm_init(ngx_conf_t *cf)
     *hpt = ngx_http_klm_handler;
 
 
-    file = mcf->files->elts;
-    for( i = 0; i < mcf->files->nelts; ++i, ++file )
+    for( list = mcf->files;
+         (file = list->item) != NULL;
+         list = list->next )
     {
         file->open_file = ngx_conf_open_file(cf->cycle, &file->name);
         if( NULL == file->open_file )
@@ -462,6 +484,7 @@ static ngx_int_t ngx_http_klm_init_worker(ngx_cycle_t *cycle)
     ngx_http_klm_main_conf_t      *mcf;
     ngx_http_klm_topic_t          *topic;
     ngx_http_klm_prop_t           *prop;
+    ngx_http_klm_list_t           *list;
     ngx_pool_cleanup_t            *cln;
 
     rd_kafka_topic_conf_t         *rktc;
@@ -525,8 +548,9 @@ static ngx_int_t ngx_http_klm_init_worker(ngx_cycle_t *cycle)
     cln->handler = ngx_http_klm_kafka_destroy;
     cln->data    = mcf->rk;
 
-    topic = mcf->topics->elts;
-    for( i = 0; i < mcf->topics->nelts; ++i, ++topic )
+    for( list = mcf->topics;
+         (topic = list->item) != NULL;
+         list = list->next )
     {
         if( !(rktc = rd_kafka_topic_conf_new()) )
         {
