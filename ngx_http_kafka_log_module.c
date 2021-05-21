@@ -14,7 +14,7 @@
 #include "librdkafka/rdkafka.h"
 
 
-#define NGX_HTTP_KLM_VERSION              "0.0.3"
+#define NGX_HTTP_KLM_VERSION              "0.0.4"
 #define NGX_HTTP_KLM_FILE_BUF_SIZE        4096
 #define NGX_HTTP_KLM_FILE_BUF_SIZE_MAX    4096 * 100
 
@@ -90,7 +90,6 @@ static ngx_int_t ngx_http_klm_init(ngx_conf_t *cf);
 static ngx_int_t ngx_http_klm_init_worker(ngx_cycle_t *cycle);
 
 static void ngx_http_klm_kafka_destroy(void *user);
-static void ngx_http_klm_topic_destroy(void *user);
 
 ngx_int_t ngx_http_klm_handler(ngx_http_request_t *r);
 
@@ -196,11 +195,10 @@ ngx_int_t ngx_http_klm_handler(ngx_http_request_t *r)
             }
         }
 
-        ngx_log_debug4(NGX_LOG_DEBUG_HTTP, r->pool->log, 0
-            , "kafka msg: '%V', key:'%V', err: %d, qlen: %d "
-            , &msg, &key, err, rd_kafka_outq_len(log->topic->rk));
+        ngx_log_debug3(NGX_LOG_DEBUG_HTTP, r->pool->log, 0
+            , "kafka msg: '%V', key:'%V', err: %d "
+            , &msg, &key, err);
 
-        /* TODO: move to the timer events */
         rd_kafka_poll(log->topic->rk, 0);
     }
 
@@ -539,13 +537,12 @@ static ngx_int_t ngx_http_klm_init_worker(ngx_cycle_t *cycle)
         return NGX_ERROR;
     }
 
-    /* FIXME: this handler executes after the topic destruction handlers */ 
     cln = ngx_pool_cleanup_add(cycle->pool, 0);
     if( cln == NULL )
         return NGX_ERROR;
 
     cln->handler = ngx_http_klm_kafka_destroy;
-    cln->data    = mcf->rk;
+    cln->data    = mcf;
 
     for( list = mcf->topics;
          (topic = list->item) != NULL;
@@ -576,13 +573,6 @@ static ngx_int_t ngx_http_klm_init_worker(ngx_cycle_t *cycle)
         }
 
         topic->rk = mcf->rk;
-
-        cln = ngx_pool_cleanup_add(cycle->pool, 0);
-        if( cln == NULL )
-            return NGX_ERROR;
-
-        cln->handler = ngx_http_klm_topic_destroy;
-        cln->data    = topic;
     }
 
     return NGX_OK;
@@ -711,21 +701,21 @@ static void ngx_http_klm_msg_cb(rd_kafka_t *rk, const rd_kafka_message_t *rkmess
     if( !rkmessage->err )
         return;
 
-    if( log->file )
-    {
-        msg.data = rkmessage->payload;
-        msg.len  = rkmessage->len;
-        key.data = rkmessage->key;
-        key.len  = rkmessage->key_len;
+    msg.data = rkmessage->payload;
+    msg.len  = rkmessage->len;
+    key.data = rkmessage->key;
+    key.len  = rkmessage->key_len;
 
+    if( log->file )
         ngx_http_klm_log_file(log->file, &msg, &key);
-    }
 
     if( ngx_http_klm_err_rate_pass() )
     {
-        ngx_log_error(NGX_LOG_ERR, cycle->pool->log, 0
-            , "%% Message delivery failed: %s\n"
-            , rd_kafka_err2str(rkmessage->err));
+	   ngx_log_error(NGX_LOG_DEBUG_HTTP, cycle->pool->log, 0
+            , "Message delivery failed. "
+            , "Error (%d) '%s', msg: '%V', key:'%V', qlen: %d "
+            , rkmessage->err, rd_kafka_err2str(rkmessage->err)
+            , &msg, &key, rd_kafka_outq_len(rk));
     }
 }
 
@@ -740,15 +730,18 @@ static void ngx_http_klm_log_cb(const rd_kafka_t *rk, int level, const char *fac
 
 static void ngx_http_klm_kafka_destroy(void *user)
 {
-    rd_kafka_destroy(user);
-}
-
-
-static void ngx_http_klm_topic_destroy(void *user)
-{
-    ngx_http_klm_topic_t *topic = user;
+    ngx_http_klm_main_conf_t      *mcf = user;
+    ngx_http_klm_topic_t          *topic;
+    ngx_http_klm_list_t           *list;
     
-    rd_kafka_flush(topic->rk, 3000);
+    rd_kafka_flush(mcf->rk, 3000);
 
-    rd_kafka_topic_destroy(topic->rkt);
+    for( list = mcf->topics; (topic = list->item) != NULL; list = list->next )
+    {
+        rd_kafka_topic_destroy(topic->rkt);
+    }
+
+    rd_kafka_destroy(mcf->rk);
 }
+
+
