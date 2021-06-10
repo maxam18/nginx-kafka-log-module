@@ -581,7 +581,7 @@ static ngx_int_t ngx_http_klm_init_worker(ngx_cycle_t *cycle)
 static int ngx_http_klm_err_rate_pass()
 {
     time_t          ts;
-    static int      cnt = 10;
+    static int      cnt  = 10;
     static time_t   last = 0;
 
     ts = ngx_time() - last;
@@ -711,7 +711,7 @@ static void ngx_http_klm_msg_cb(rd_kafka_t *rk, const rd_kafka_message_t *rkmess
 
     if( ngx_http_klm_err_rate_pass() )
     {
-	   ngx_log_error(NGX_LOG_DEBUG_HTTP, cycle->pool->log, 0
+	    ngx_log_error(NGX_LOG_WARN, cycle->pool->log, 0
             , "Message delivery failed. "
             , "Error (%d) '%s', msg: '%V', key:'%V', qlen: %d "
             , rkmessage->err, rd_kafka_err2str(rkmessage->err)
@@ -722,9 +722,14 @@ static void ngx_http_klm_msg_cb(rd_kafka_t *rk, const rd_kafka_message_t *rkmess
 
 static void ngx_http_klm_log_cb(const rd_kafka_t *rk, int level, const char *fac, const char *buf)
 {
-    ngx_log_error( NGX_LOG_ALERT, ngx_cycle->log, 0
-            , "PRODUCE-%i-%s: %s: %s"
-            , level, fac, rk ? rd_kafka_name(rk) : NULL, buf);
+    if( ngx_http_klm_err_rate_pass() )
+    {
+        if( level > 8 || level < 0 )
+            level = 8;
+        ngx_log_error( level, ngx_cycle->log, 0
+            , "(%s) %s: %s"
+            , fac, rk ? rd_kafka_name(rk) : NULL, buf);
+    }
 }
 
 
