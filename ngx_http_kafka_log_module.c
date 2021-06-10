@@ -724,9 +724,10 @@ static void ngx_http_klm_log_cb(const rd_kafka_t *rk, int level, const char *fac
 {
     if( ngx_http_klm_err_rate_pass() )
     {
-        if( level > 8 || level < 0 )
+        if( (unsigned int)level > 8 )
             level = 8;
-        ngx_log_error( level, ngx_cycle->log, 0
+
+        ngx_log_error( (unsigned int)level, ngx_cycle->log, 0
             , "(%s) %s: %s"
             , fac, rk ? rd_kafka_name(rk) : NULL, buf);
     }
