@@ -251,6 +251,8 @@ static char *ngx_http_klm_conf_set_format(ngx_conf_t *cf, ngx_command_t *cmd, vo
 
     fmt->name = args[1];
 
+    ngx_memzero(&ccv, sizeof(ngx_http_compile_complex_value_t));
+
     ccv.cf = cf;
     ccv.value = &args[2];
     ccv.complex_value = &fmt->fmt;
@@ -260,6 +262,8 @@ static char *ngx_http_klm_conf_set_format(ngx_conf_t *cf, ngx_command_t *cmd, vo
 
     if( cf->args->nelts > 3 )
     {
+	ngx_memzero(&ccv, sizeof(ngx_http_compile_complex_value_t));
+
         ccv.cf = cf;
         ccv.value = &args[3];
         ccv.complex_value = &fmt->key;
