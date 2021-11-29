@@ -716,10 +716,8 @@ static void ngx_http_klm_msg_cb(rd_kafka_t *rk, const rd_kafka_message_t *rkmess
     if( ngx_http_klm_err_rate_pass() )
     {
 	    ngx_log_error(NGX_LOG_WARN, cycle->pool->log, 0
-            , "Message delivery failed. "
-            , "Error (%d) '%s', msg: '%V', key:'%V', qlen: %d "
-            , rkmessage->err, rd_kafka_err2str(rkmessage->err)
-            , &msg, &key, rd_kafka_outq_len(rk));
+            , "Message delivery failed. Error (%d), qlen: %d "
+            , rkmessage->err, rd_kafka_outq_len(rk));
     }
 }
 
@@ -733,7 +731,7 @@ static void ngx_http_klm_log_cb(const rd_kafka_t *rk, int level, const char *fac
 
         ngx_log_error( (unsigned int)level, ngx_cycle->log, 0
             , "(%s) %s: %s"
-            , fac, rk ? rd_kafka_name(rk) : NULL, buf);
+            , fac, rk ? rd_kafka_name(rk) : "NULL", buf);
     }
 }
 
