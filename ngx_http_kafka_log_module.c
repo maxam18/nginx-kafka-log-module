@@ -721,17 +721,17 @@ static void ngx_http_klm_msg_cb(rd_kafka_t *rk, const rd_kafka_message_t *rkmess
     }
 }
 
-
 static void ngx_http_klm_log_cb(const rd_kafka_t *rk, int level, const char *fac, const char *buf)
 {
+    static const char *nil = "#null#";
     if( ngx_http_klm_err_rate_pass() )
     {
         if( (unsigned int)level > 8 )
             level = 8;
-
+        
         ngx_log_error( (unsigned int)level, ngx_cycle->log, 0
-            , "(%s) %s: %s"
-            , fac, rk ? rd_kafka_name(rk) : "NULL", buf);
+            , "kafka err (%s) %s: %s"
+            , fac, rk ? rd_kafka_name(rk) : nil, buf ? buf : nil);
     }
 }
 
@@ -742,7 +742,7 @@ static void ngx_http_klm_kafka_destroy(void *user)
     ngx_http_klm_topic_t          *topic;
     ngx_http_klm_list_t           *list;
     
-    rd_kafka_flush(mcf->rk, 3000);
+    rd_kafka_flush(mcf->rk, 1000);
 
     for( list = mcf->topics; (topic = list->item) != NULL; list = list->next )
     {
