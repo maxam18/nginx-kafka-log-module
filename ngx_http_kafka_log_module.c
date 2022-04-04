@@ -355,8 +355,11 @@ static char *ngx_http_klm_conf_set_log(ngx_conf_t *cf, ngx_command_t *cmd, void 
         return NGX_CONF_ERROR;
     }
 
-    if( cf->args->nelts == 3 )
+    if( cf->args->nelts == 3 ) {
+        log->file = NULL;
+
         return NGX_CONF_OK;
+    }
     
     for( list = mcf->files; 
          (log->file = list->item) != NULL;
