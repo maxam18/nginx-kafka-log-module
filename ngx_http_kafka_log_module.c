@@ -14,14 +14,21 @@
 #include "librdkafka/rdkafka.h"
 
 
-#define NGX_HTTP_KLM_VERSION              "0.0.4"
+#define NGX_HTTP_KLM_VERSION              "1.2.0"
 #define NGX_HTTP_KLM_FILE_BUF_SIZE        4096
 #define NGX_HTTP_KLM_FILE_BUF_SIZE_MAX    4096 * 100
+#define NGX_HTTP_KLM_FSREC_MAGIC          0x4B4C /* {'K', 'L'} */
 
 /*
-#define dd(...) fprintf( stderr, "KAFKA " __VA_ARGS__)
+#define dd(...) fprintf( stderr, "KAFKALOG " __VA_ARGS__)
 */
 #define dd(...)
+
+typedef struct {
+    uint16_t                    magic;
+    uint16_t                    key_len;
+    uint32_t                    body_len;
+} ngx_http_klm_frec_hdr_t;
 
 typedef struct {
     ngx_str_t                    name;
@@ -654,12 +661,17 @@ static void ngx_http_klm_fb_flush(ngx_open_file_t *open_file, ngx_log_t *errlog)
 
 static void ngx_http_klm_log_file(ngx_http_klm_file_t *file, ngx_str_t *msg, ngx_str_t *key)
 {
-    size_t  len;
+    size_t                      len;
+    ngx_http_klm_frec_hdr_t     hdr = { 
+                                    .magic = NGX_HTTP_KLM_FSREC_MAGIC, 
+                                    .key_len = key->len,
+                                    .body_len = msg->len};
 
-    len = msg->len + key->len + 2;
+    len = msg->len + key->len + sizeof(ngx_http_klm_frec_hdr_t);
     if( (size_t)(file->end - file->pos) < len )
     {
         ngx_http_klm_fb_flush(file->open_file, ngx_cycle->log);
+
         if( (size_t)(file->end - file->start) < len )
         {
             len = len + (NGX_HTTP_KLM_FILE_BUF_SIZE 
@@ -687,16 +699,16 @@ static void ngx_http_klm_log_file(ngx_http_klm_file_t *file, ngx_str_t *msg, ngx
         }
     }
 
+    file->pos = ngx_cpymem(file->pos, &hdr, sizeof(hdr));
+
     if( key->len )
     {
         file->pos = ngx_cpymem(file->pos
                                 , key->data, key->len);
-        *file->pos++ = '\t';
     }
 
     file->pos = ngx_cpymem(file->pos
                             , msg->data, msg->len);
-    *file->pos++ = '\n';
 }
 
 static void ngx_http_klm_msg_cb(rd_kafka_t *rk, const rd_kafka_message_t *rkmessage, void *opaque)
@@ -754,5 +766,3 @@ static void ngx_http_klm_kafka_destroy(void *user)
 
     rd_kafka_destroy(mcf->rk);
 }
-
-
