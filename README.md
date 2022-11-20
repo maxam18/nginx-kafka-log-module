@@ -55,6 +55,18 @@ Enables logging from the location. Accepts multiple entries. Where
     `format_name` the name of the formatted string to set the message body and message key.
     `fallback_file` is an optional parameter. The file where to save messages dropped by librdkafka.
 
+### fallback_file
+Fallback file keeps undelivered messages. The record format follows:
+
+	|      |                  record header                               |    record data   |
+	|------|---------------|---------------|------------------------------|--------|---------|
+	|      | 2 bytes magic |    key len    |     4 bytes payload len      |   key  | payload |
+	|------|---------------|---------------|------------------------------|--------|---------|
+	| byte |   0   |   1   |   2   |   3   |   4   |   5   |   6  |   7   |   of   |   of    |
+	|------|---------------|---------------|------------------------------|  key   | payload |
+	|      |     0x4B4C    |   uint16_t    |	   uint32_t           | length | length  |
+
+
 # Try
 ## Configuration example
 
