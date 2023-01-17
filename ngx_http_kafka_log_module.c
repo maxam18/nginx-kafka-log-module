@@ -38,6 +38,7 @@ typedef struct {
 
 typedef struct {
     ngx_str_t                    name;
+    ngx_str_t                    ack;          /* acknowledgement            */
     rd_kafka_topic_t            *rkt;
     rd_kafka_t                  *rk;
 } ngx_http_klm_topic_t;
@@ -161,6 +162,8 @@ ngx_module_t ngx_http_kafka_log_module = {
     NULL,                                   /* exit master */
     NGX_MODULE_V1_PADDING
 };
+
+ngx_str_t   ngx_http_kafka_log_module_str_zero = ngx_string("0");
 
 ngx_int_t ngx_http_klm_handler(ngx_http_request_t *r)
 {
@@ -291,10 +294,10 @@ static char *ngx_http_klm_conf_set_log(ngx_conf_t *cf, ngx_command_t *cmd, void 
     ngx_http_klm_loc_conf_t     *lcf = conf;
     ngx_http_klm_list_t         *list;
     ngx_http_klm_log_t          *log;
-    ngx_str_t                   *args = cf->args->elts;
-    ngx_str_t                    name;
     ngx_uint_t                   i;
-    u_char                      *p;
+    ngx_str_t                    name, ack;
+    u_char                      *p, *sp;
+    ngx_str_t                   *args = cf->args->elts;
 
     mcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_kafka_log_module);
 
@@ -310,16 +313,34 @@ static char *ngx_http_klm_conf_set_log(ngx_conf_t *cf, ngx_command_t *cmd, void 
     if( log == NULL )
         return NGX_CONF_ERROR;
 
-    if( (p = (u_char *)ngx_strchr(args[1].data, ':')) )
+    sp = args[1].data;
+
+    if( (p = (u_char *)ngx_strchr(sp, '@')) )
     {
-        name.len = p - args[1].data;
-        name.data = args[1].data;
-        
         *p++ = 0;
 
-        log->partition = ngx_atoi(p, args[1].len - (p-args[1].data));
-    } else {
-        name = args[1];
+        ack.len  = p - sp;
+        ack.data = sp;
+
+        sp = p;
+    } else
+    {
+        ack = ngx_http_kafka_log_module_str_zero;
+    }
+
+    name.data = sp;
+
+    if( (p = (u_char *)ngx_strchr(sp, ':')) )
+    {
+        name.len  = p - sp;
+
+        *p++ = 0;
+
+        log->partition = ngx_atoi(p, (args[1].data+args[1].len) - p);
+    } else
+    {
+        name.len  = (args[1].data+args[1].len) - sp;
+
         log->partition = RD_KAFKA_PARTITION_UA;
     }
 
@@ -328,9 +349,12 @@ static char *ngx_http_klm_conf_set_log(ngx_conf_t *cf, ngx_command_t *cmd, void 
          list = list->next )
     {
         if( log->topic->name.len == name.len
+             && log->topic->ack.len == ack.len
              && ngx_strncmp(log->topic->name.data
-                    , name.data, name.len) 
-            == 0 )
+                    , name.data, name.len) == 0
+             && ngx_strncmp(log->topic->ack.data
+                    , ack.data, ack.len) == 0
+          )
             break;
     }
 
@@ -344,6 +368,7 @@ static char *ngx_http_klm_conf_set_log(ngx_conf_t *cf, ngx_command_t *cmd, void 
             return NGX_CONF_ERROR;
 
         log->topic->name = name;
+        log->topic->ack  = ack;
     }
 
     log->format = mcf->formats->elts;
@@ -570,7 +595,8 @@ static ngx_int_t ngx_http_klm_init_worker(ngx_cycle_t *cycle)
         }
 
         if( RD_KAFKA_CONF_OK != 
-            rd_kafka_topic_conf_set(rktc, "request.required.acks", "0"
+            rd_kafka_topic_conf_set(rktc, "request.required.acks"
+                            , (char *)topic->ack.data
                             , errstr, sizeof(errstr)) )
         {
             ngx_log_error(NGX_LOG_ERR, cycle->pool->log, 0
