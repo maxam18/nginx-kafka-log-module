@@ -45,11 +45,12 @@ Inspired by [nginx-kafka-log-module](https://github.com/kaltura/nginx-kafka-log-
     `message_id` is an optional parameter. Kafka message key will be set to this string. Accepts nginx variables.
 
 ## klm_log
-* **syntax**: `klm_log  topic[:partition]  format_name  [fallback_file]`
+* **syntax**: `klm_log  [acks@]topic[:partition]  format_name  [fallback_file]`
 * **default**: `NULL`
 * **context**: `location`
 
 Enables logging from the location. Accepts multiple entries. Where 
+    `acks` acknowledgement [0, 1, ... , all], default is '0',
     `topic` is the topic name,
     `partition` is the partition number or `RD_KAFKA_PARTITION_UA` if omitted, 
     `format_name` the name of the formatted string to set the message body and message key.
