@@ -349,13 +349,15 @@ static char *ngx_http_klm_conf_set_log(ngx_conf_t *cf, ngx_command_t *cmd, void 
          list = list->next )
     {
         if( log->topic->name.len == name.len
-             && log->topic->ack.len == ack.len
              && ngx_strncmp(log->topic->name.data
                     , name.data, name.len) == 0
-             && ngx_strncmp(log->topic->ack.data
-                    , ack.data, ack.len) == 0
           )
+        {
+            if( !(log->topic->ack.len == ack.len && ngx_strncmp(
+                    log->topic->ack.data, ack.data, ack.len) == 0) )
+                return "topic with different config is not allowed";
             break;
+        }
     }
 
     if( log->topic == NULL )
