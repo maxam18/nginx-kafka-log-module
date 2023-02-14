@@ -16,7 +16,7 @@
 
 #define NGX_HTTP_KLM_VERSION              "1.2.0"
 #define NGX_HTTP_KLM_FILE_BUF_SIZE        4096
-#define NGX_HTTP_KLM_FILE_BUF_SIZE_MAX    4096 * 100
+#define NGX_HTTP_KLM_FILE_BUF_SIZE_MAX    4096 * 1024
 #define NGX_HTTP_KLM_FSREC_MAGIC          0x4B4C /* {'K', 'L'} */
 
 /*
