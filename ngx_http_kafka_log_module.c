@@ -14,9 +14,8 @@
 #include "librdkafka/rdkafka.h"
 
 
-#define NGX_HTTP_KLM_VERSION              "1.2.0"
+#define NGX_HTTP_KLM_VERSION              "1.3.1"
 #define NGX_HTTP_KLM_FILE_BUF_SIZE        4096
-#define NGX_HTTP_KLM_FILE_BUF_SIZE_MAX    4096 * 1024
 #define NGX_HTTP_KLM_FSREC_MAGIC          0x4B4C /* {'K', 'L'} */
 
 /*
@@ -704,13 +703,6 @@ static void ngx_http_klm_log_file(ngx_http_klm_file_t *file, ngx_str_t *msg, ngx
         {
             len = len + (NGX_HTTP_KLM_FILE_BUF_SIZE 
                          - len % NGX_HTTP_KLM_FILE_BUF_SIZE);
-            if( len > NGX_HTTP_KLM_FILE_BUF_SIZE_MAX )
-            {
-                ngx_log_error( NGX_LOG_WARN, ngx_cycle->log, 0
-                    , "buffer request of %z bytes is too big at kafka_log_module "
-                    , len);
-                return;
-            }
 
             ngx_pfree(ngx_cycle->pool, file->start);
 
